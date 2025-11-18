@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Stork Runner: Low Latency Dash (Final Stable Version)</title>
+    <title>Stork Runner: Low Latency Dash (Frame Rate Stabilized)</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap');
 
@@ -260,6 +260,7 @@
         const gameLogo = document.getElementById('gameLogo'); 
         const startScreenLogo = document.getElementById('startScreenLogo');
 
+        // مسیر فایل کاراکتر (مطمئن شوید که stork.png با حروف کوچک آپلود شده است)
         const IMAGE_PATH = 'stork.png'; 
         const playerImage = new Image();
         playerImage.src = IMAGE_PATH;
@@ -273,7 +274,7 @@
             width: playerDisplayWidth,
             height: playerDisplayHeight,
             dy: 0,
-            jumpPower: -10,
+            jumpPower: -11, // قدرت پرش
             grounded: false,
         };
         
@@ -315,6 +316,12 @@
         let score = 0;
         let frames = 0;
 
+        // --- Delta Time Variables for Stabilization ---
+        let lastTime = 0;
+        const targetFPS = 60;
+        const targetDelta = 1000 / targetFPS; // 16.67ms
+        // ------------------------------------
+
         let isMagnetActive = false;
         let magnetTimer = 0;
         const MAGNET_DURATION_SECONDS = 10; 
@@ -329,6 +336,7 @@
         let tokens = [];
         let particles = [];
         
+        // --- Sound Files (نیاز به آپلود دارند) ---
         const sounds = {
             jump: new Audio('jump.wav'),
             token: new Audio('collect_token.wav'),
@@ -346,7 +354,7 @@
             if (sound) {
                 sound.currentTime = 0; 
                 sound.play().catch(e => {
-                    // console.log("Sound playback blocked:", e);
+                    // Sound playback blocked
                 });
             }
         }
@@ -364,7 +372,7 @@
         function updateLifeDisplay() {
             let hearts = "";
             for(let i=0; i < currentLives; i++) {
-                 hearts += "🥚 "; // Egg emoji for life
+                 hearts += "🥚 "; 
             }
             lifeDisplayEl.innerHTML = hearts;
         }
@@ -384,13 +392,13 @@
                 this.h = 40;
                 this.x = canvas.width;
                 this.y = canvas.height - 60 - this.h; 
-                // Using emojis for obstacles
                 const obstacleTypes = ['⏳', '🧱', '⛽']; 
                 this.type = obstacleTypes[Math.floor(Math.random() * obstacleTypes.length)];
                 this.markedForDeletion = false;
             }
-            update() {
-                this.x -= gameSpeed;
+            // Movement is now scaled by timeFactor
+            update(timeFactor) { 
+                this.x -= gameSpeed * timeFactor;
                 if (this.x + this.w < 0) this.markedForDeletion = true;
             }
             draw() {
@@ -420,7 +428,6 @@
             constructor() {
                 this.size = 30;
                 this.x = canvas.width;
-                // Token ratio: 9 Lightning (Energy) to 1 Magnet
                 const tokenTypes = ['⚡', '⚡', '⚡', '⚡', '⚡', '⚡', '⚡', '⚡', '⚡', '🧲']; 
                 this.type = tokenTypes[Math.floor(Math.random() * tokenTypes.length)];
                 
@@ -439,8 +446,9 @@
 
                 this.markedForDeletion = false;
             }
-            update() {
-                this.x -= gameSpeed;
+            // Movement is now scaled by timeFactor
+            update(timeFactor) { 
+                this.x -= gameSpeed * timeFactor;
                 if (this.x + this.size < 0) this.markedForDeletion = true;
             }
             draw() {
@@ -465,8 +473,9 @@
                 this.speedY = Math.random() * 2 - 1;
                 this.life = 1.0;
             }
-            update() {
-                this.x -= gameSpeed;
+            // Particle update does NOT need timeFactor as their speed is intrinsic and small
+            update() { 
+                this.x -= gameSpeed * (16.67 / 16.67); 
                 this.x += this.speedX;
                 this.y += this.speedY;
                 this.life -= 0.05;
@@ -520,6 +529,9 @@
             
             Object.values(sounds).forEach(s => s.currentTime = 0);
             
+            // Reset lastTime for Delta Time calculation
+            lastTime = 0;
+            
             requestAnimationFrame(loop);
         }
 
@@ -546,17 +558,34 @@
         function shareOnTwitter() {
             const currentScore = Math.floor(score);
             const high = Math.floor(highScore);
-            const text = encodeURIComponent(`I scored ${currentScore} in the Stork Runner! 🚀 (My High Score: ${high}). Can you beat me?`);
-            // Note: The game link URL should replace 'YOUR_GAME_LINK_HERE' if you host it.
+            
+            // لینک بازی شما
+            const gameLink = "https://stork-runner-v1.vercel.app/";
+            
+            // متن توییت: امتیاز + لینک بازی
+            const text = encodeURIComponent(`I scored ${currentScore} in the Stork Runner! 🚀 (My High Score: ${high}). Play it here: ${gameLink}`);
+            
+            // URL نهایی توییتر
             const url = `https://x.com/intent/tweet?text=${text}&hashtags=StorkRunner,StorkOracle`;
             
             window.open(url, '_blank');
         }
 
 
-        function loop() {
+        // --- The main game loop stabilized with Delta Time ---
+        function loop(timestamp) {
             if (!isRunning) return;
 
+            // 1. Calculate Delta Time and Time Factor
+            if (!lastTime) {
+                lastTime = timestamp;
+            }
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+            
+            const timeFactor = deltaTime / targetDelta; 
+
+            // 2. Clear Canvas and Draw Ground
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             // Ground Bar
@@ -569,17 +598,16 @@
             ctx.lineWidth = 3;
             ctx.stroke();
 
-            // Invincibility/Flicker management
+            // 3. Update Player Physics (using timeFactor)
             if (isInvincible) {
-                invincibilityTimer--;
+                invincibilityTimer -= timeFactor; 
                 if (invincibilityTimer <= 0) {
                     isInvincible = false;
                 }
             }
 
-
-            player.dy += gravity;
-            player.y += player.dy;
+            player.dy += gravity * timeFactor;
+            player.y += player.dy * timeFactor; 
 
             if (player.y + player.height > canvas.height - 60) {
                 player.y = canvas.height - 60 - player.height;
@@ -592,10 +620,10 @@
             ctx.textAlign = 'left';
             ctx.textBaseline = 'alphabetic';
 
-            // Draw player (with flicker effect if invincible)
             const shouldDrawPlayer = !isInvincible || (isInvincible && frames % (2 * BLINK_INTERVAL) < BLINK_INTERVAL);
 
             if (shouldDrawPlayer) {
+                // نمایش تصویر لک لک یا ایموجی جایگزین (Swan)
                 if (playerImage.complete && playerImage.naturalWidth !== 0) {
                     ctx.drawImage(playerImage, player.x, player.y, player.width, player.height);
                 } else {
@@ -605,12 +633,14 @@
             }
             
 
-            // Obstacle spawning (every 100 frames)
+            // 4. Update Obstacles and Tokens (using timeFactor)
+            
+            // Obstacle spawning
             if (frames % 100 === 0) { 
                 if (Math.random() > 0.3) obstacles.push(new Obstacle());
             }
 
-            // Token spawning (every 40 frames)
+            // Token spawning
             if (frames % 40 === 0) {
                 if (Math.random() > 0.5) tokens.push(new Token());
             }
@@ -618,7 +648,7 @@
             const HITBOX_PADDING = 15; 
             
             obstacles.forEach((obs, index) => {
-                obs.update();
+                obs.update(timeFactor); 
                 obs.draw();
                 
                 // Collision logic
@@ -649,7 +679,7 @@
             });
 
             tokens.forEach((token, index) => {
-                token.update();
+                token.update(timeFactor); 
                 token.draw();
 
                 const distanceX = (player.x + player.width / 2) - (token.x + token.size / 2);
@@ -658,7 +688,7 @@
 
                 // Magnet attraction logic
                 if (isMagnetActive && token.type === '⚡' && distance < 300) { 
-                    const magnetForce = 0.1;
+                    const magnetForce = 0.1 * timeFactor;
                     token.x += distanceX * magnetForce;
                     token.y += distanceY * magnetForce;
                 }
@@ -687,10 +717,18 @@
 
                 if (token.markedForDeletion) tokens.splice(index, 1);
             });
+            
+            // 5. Update Particles
+            particles.forEach((particle, index) => {
+                particle.update(); 
+                particle.draw(); 
+                if (particle.life <= 0) particle.markedForDeletion = true;
+            });
+            particles = particles.filter(p => !p.markedForDeletion);
 
-            // Magnet timer update
+            // Magnet timer update (time-corrected)
             if (isMagnetActive) {
-                magnetTimer--;
+                magnetTimer -= timeFactor;
                 const secondsLeft = Math.ceil(magnetTimer / 60);
                 magnetTimeRemainingEl.innerText = secondsLeft;
                 if (magnetTimer <= 0) {
@@ -699,11 +737,12 @@
                 }
             }
 
-            score += 0.05; 
+            // 6. Score and Speed Update
+            score += 0.05 * timeFactor; 
             scoreEl.innerText = Math.floor(score);
             
             frames++;
-            // Game speed increase (faster rate: +0.8 every 500 frames)
+            // Game speed increase
             if (frames % 500 === 0) {
                 gameSpeed += 0.8; 
                 speedEl.innerText = (gameSpeed / 5).toFixed(1) + "x";
