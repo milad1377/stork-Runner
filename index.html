@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Stork Runner: Low Latency Dash (Final Stable Version)</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap');
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #050505;
+            color: white;
+            font-family: 'Orbitron', sans-serif;
+            overflow: hidden;
+            width: 100vw; 
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            touch-action: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            max-width: none; 
+            max-height: none; 
+            
+            background: linear-gradient(180deg, #0f4c75 0%, #001f3f 100%); 
+            
+            border-top: 1px solid #00ff9d50; 
+            border-bottom: 1px solid #00ff9d50; 
+            overflow: hidden;
+            box-shadow: 0 0 10px rgba(0, 255, 157, 0.1); 
+        }
+
+        @media (min-width: 800px) {
+            #game-container {
+                max-width: 800px;
+                max-height: 450px;
+            }
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #gameLogo {
+            position: absolute;
+            top: 35%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 750px; 
+            height: auto;
+            opacity: 0; 
+            z-index: 5;
+            pointer-events: none;
+            transition: opacity 0.5s;
+        }
+
+        #startScreenLogo {
+            width: 250px; 
+            height: auto;
+            margin-bottom: 20px; 
+            pointer-events: none;
+        }
+
+        .ui-layer {
+            position: absolute;
+            top: 10px;
+            left: 0;
+            width: 100%;
+            padding: 0 20px;
+            display: flex; 
+            justify-content: space-between; 
+            align-items: flex-start; 
+            pointer-events: none;
+            box-sizing: border-box;
+            z-index: 10;
+        }
+
+        .speed-meter { 
+            font-size: 14px; 
+            color: #00b8ff;
+            margin-top: 5px; 
+        }
+        
+        #right-container {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+        
+        #scoreDisplay {
+            font-size: 20px; 
+            color: #00ff9d; 
+            text-shadow: 0 0 3px #00ff9d50; 
+            display: flex; 
+            align-items: baseline;
+            gap: 5px; 
+        }
+
+        .magnet-timer {
+            font-size: 14px; 
+            color: #ffcc00;
+            text-shadow: 0 0 3px #ffcc0050; 
+            margin-top: 5px; 
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+        .magnet-timer.active {
+            opacity: 1;
+        }
+        .magnet-timer span {
+            margin-left: 5px;
+        }
+        
+        .life-display {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 25px; 
+            color: white; 
+            text-shadow: 0 0 5px #ff000050;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 20;
+            backdrop-filter: blur(3px);
+        }
+
+        h1 {
+            font-size: 32px;
+            color: #00ff9d;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            text-shadow: 0 0 10px #00ff9d50; 
+            text-align: center;
+        }
+
+        p { color: #ccc; font-size: 14px; margin-bottom: 20px; text-align: center; }
+        
+        .high-score-display {
+            font-size: 16px;
+            color: #ffcc00;
+            margin-top: 5px;
+            margin-bottom: 25px;
+            font-weight: bold;
+        }
+
+        button {
+            background: #00ff9d;
+            color: black;
+            border: none;
+            padding: 12px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            font-family: 'Orbitron', sans-serif;
+            cursor: pointer;
+            clip-path: polygon(10% 0, 100% 0, 100% 70%, 90% 100%, 0 100%, 0 30%);
+            transition: transform 0.1s;
+            margin-top: 10px;
+        }
+
+        button:active { transform: scale(0.95); }
+        .hidden { display: none !important; }
+        
+        .controls-hint {
+            position: absolute;
+            bottom: 10px;
+            width: 100%;
+            text-align: center;
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            pointer-events: none;
+        }
+        
+        #twitterShareButton {
+            background-color: #1DA1F2;
+            color: white;
+            clip-path: none; 
+            padding: 10px 20px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div class="ui-layer">
+            <div class="speed-meter">SPEED: <span id="speedVal">1x</span></div> 
+            <div id="lifeDisplay" class="life-display"></div>
+
+            <div id="right-container">
+                <div id="scoreDisplay">
+                    <span id="scoreText">SCORE: </span><span id="scoreVal">0</span>
+                </div>
+                <div id="magnetTimerDisplay" class="magnet-timer">
+                    🧲 <span id="magnetTimeRemaining">10</span>s
+                </div>
+            </div>
+        </div>
+
+        <img id="gameLogo" src="logo.png" alt="Game Logo"> 
+        
+        <div id="startScreen" class="overlay">
+            
+            <img id="startScreenLogo" src="start_logo.png" alt="Start Screen Logo"> 
+            
+            <h1>Stork Runner<br><span style="font-size:16px; color:white">Low Latency Dash</span></h1>
+            <p>Tap or Press [ Space ] to Jump</p>
+            <button onclick="startGame()">START RUN</button>
+        </div>
+
+        <div id="gameOverScreen" class="overlay hidden">
+            <h1 style="color:#ff4d4d">HIGH LATENCY !</h1>
+            <p style="margin-bottom: 0;">Your Score: <span id="finalScore">0</span></p>
+            <div class="high-score-display">
+                High Score: <span id="highScoreVal">0</span>
+            </div>
+            
+            <button onclick="startGame()">RETRY</button>
+            <button id="twitterShareButton" onclick="shareOnTwitter()">Share on X (Twitter)</button>
+        </div>
+
+        <canvas id="gameCanvas"></canvas>
+        <div class="controls-hint">TAP TO JUMP</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('scoreVal');
+        const speedEl = document.getElementById('speedVal');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const finalScoreEl = document.getElementById('finalScore');
+        const highScoreValEl = document.getElementById('highScoreVal');
+        const twitterShareButton = document.getElementById('twitterShareButton');
+        const magnetTimerDisplay = document.getElementById('magnetTimerDisplay');
+        const magnetTimeRemainingEl = document.getElementById('magnetTimeRemaining');
+        const lifeDisplayEl = document.getElementById('lifeDisplay'); 
+        
+        const gameLogo = document.getElementById('gameLogo'); 
+        const startScreenLogo = document.getElementById('startScreenLogo');
+
+        const IMAGE_PATH = 'stork.png'; 
+        const playerImage = new Image();
+        playerImage.src = IMAGE_PATH;
+
+        let playerDisplayWidth = 80;
+        let playerDisplayHeight = 80;
+        
+        const player = {
+            x: 50,
+            y: 0,
+            width: playerDisplayWidth,
+            height: playerDisplayHeight,
+            dy: 0,
+            jumpPower: -10,
+            grounded: false,
+        };
+        
+        let isRunning = false; 
+
+        // Read High Score from localStorage
+        let highScore = parseInt(localStorage.getItem('storkRunnerHighScore') || '0', 10);
+
+        playerImage.onload = () => {
+            const aspectRatio = playerImage.naturalWidth / playerImage.naturalHeight;
+            
+            if (aspectRatio > 1) { 
+                playerDisplayHeight = 80;
+                playerDisplayWidth = 80 * aspectRatio;
+            } else { 
+                playerDisplayWidth = 80;
+                playerDisplayHeight = 80 / aspectRatio;
+            }
+
+            player.width = playerDisplayWidth;
+            player.height = playerDisplayHeight;
+        };
+
+        player.width = playerDisplayWidth;
+        player.height = playerDisplayHeight;
+        
+        function resize() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            if(!isRunning) player.y = canvas.height - 60 - player.height; 
+        }
+
+        resize(); 
+        window.addEventListener('resize', resize);
+        
+        const gravity = 0.4; 
+        
+        let gameSpeed = 5.0; // Starting speed (1x)
+        let score = 0;
+        let frames = 0;
+
+        let isMagnetActive = false;
+        let magnetTimer = 0;
+        const MAGNET_DURATION_SECONDS = 10; 
+
+        let currentLives = 3;
+        let isInvincible = false;
+        let invincibilityTimer = 0;
+        const INVINCIBILITY_DURATION_SECONDS = 2; 
+        const BLINK_INTERVAL = 5; 
+
+        let obstacles = [];
+        let tokens = [];
+        let particles = [];
+        
+        const sounds = {
+            jump: new Audio('jump.wav'),
+            token: new Audio('collect_token.wav'),
+            magnet: new Audio('collect_magnet.wav'),
+            hit: new Audio('hit.wav'),
+            gameOver: new Audio('game_over.wav'),
+            click: new Audio('click.wav') 
+        };
+        
+        sounds.hit.volume = 0.5;
+        sounds.gameOver.volume = 0.7;
+        
+        function playSound(soundKey) {
+            const sound = sounds[soundKey];
+            if (sound) {
+                sound.currentTime = 0; 
+                sound.play().catch(e => {
+                    // console.log("Sound playback blocked:", e);
+                });
+            }
+        }
+
+        
+        function jump() {
+            if (player.grounded && isRunning) {
+                player.dy = player.jumpPower;
+                player.grounded = false;
+                spawnParticles(player.x + player.width / 2, player.y + player.height, '#fff', 5);
+                playSound('jump'); 
+            }
+        }
+        
+        function updateLifeDisplay() {
+            let hearts = "";
+            for(let i=0; i < currentLives; i++) {
+                 hearts += "🥚 "; // Egg emoji for life
+            }
+            lifeDisplayEl.innerHTML = hearts;
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.code === 'ArrowUp') jump();
+        });
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault(); 
+            jump();
+        }, {passive: false});
+        canvas.addEventListener('mousedown', jump);
+
+        class Obstacle {
+            constructor() {
+                this.w = 40;
+                this.h = 40;
+                this.x = canvas.width;
+                this.y = canvas.height - 60 - this.h; 
+                // Using emojis for obstacles
+                const obstacleTypes = ['⏳', '🧱', '⛽']; 
+                this.type = obstacleTypes[Math.floor(Math.random() * obstacleTypes.length)];
+                this.markedForDeletion = false;
+            }
+            update() {
+                this.x -= gameSpeed;
+                if (this.x + this.w < 0) this.markedForDeletion = true;
+            }
+            draw() {
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'alphabetic';
+                
+                ctx.font = "35px Arial";
+                ctx.fillText(this.type, this.x, this.y + 35);
+
+                const badObstacleTypes = ['⏳', '🧱', '⛽']; 
+                if (badObstacleTypes.includes(this.type)) {
+                    ctx.font = "30px Arial"; 
+                    ctx.fillStyle = "yellow"; 
+                    
+                    ctx.textAlign = 'center';     
+                    ctx.textBaseline = 'alphabetic'; 
+
+                    ctx.fillText("⚠️", this.x + this.w / 2, this.y + this.h + 40); 
+                    
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'alphabetic';
+                }
+            }
+        }
+
+        class Token {
+            constructor() {
+                this.size = 30;
+                this.x = canvas.width;
+                // Token ratio: 9 Lightning (Energy) to 1 Magnet
+                const tokenTypes = ['⚡', '⚡', '⚡', '⚡', '⚡', '⚡', '⚡', '⚡', '⚡', '🧲']; 
+                this.type = tokenTypes[Math.floor(Math.random() * tokenTypes.length)];
+                
+                if (this.type === '🧲') { 
+                    this.y = canvas.height - 60 - this.size - 20; 
+                } else { 
+                    const isOnGround = Math.random() > 0.5;
+                    if (isOnGround) {
+                         this.y = canvas.height - 60 - this.size; 
+                    } else {
+                        const minHeight = canvas.height - 60 - this.size - 60; 
+                        const maxHeight = canvas.height - 60 - this.size - 180; 
+                        this.y = minHeight - (Math.random() * (minHeight - maxHeight)); 
+                    }
+                }
+
+                this.markedForDeletion = false;
+            }
+            update() {
+                this.x -= gameSpeed;
+                if (this.x + this.size < 0) this.markedForDeletion = true;
+            }
+            draw() {
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'alphabetic';
+
+                ctx.font = "30px Arial";
+                ctx.shadowColor = (this.type === '🧲') ? "#ffcc00" : "#00ff9d"; 
+                ctx.shadowBlur = 3; 
+                ctx.fillText(this.type, this.x, this.y + 30);
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.size = Math.random() * 3 + 1;
+                this.speedX = Math.random() * 2 - 1;
+                this.speedY = Math.random() * 2 - 1;
+                this.life = 1.0;
+            }
+            update() {
+                this.x -= gameSpeed;
+                this.x += this.speedX;
+                this.y += this.speedY;
+                this.life -= 0.05;
+            }
+            draw() {
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        function spawnParticles(x, y, color, count) {
+            for(let i=0; i<count; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        function startGame() {
+            playSound('click'); 
+
+            gameLogo.style.opacity = '0.3'; 
+            startScreenLogo.style.display = 'none';
+
+            isRunning = true; 
+            
+            player.y = canvas.height - 60 - player.height; 
+            player.dy = 0;
+            obstacles = [];
+            tokens = [];
+            particles = [];
+            score = 0;
+            gameSpeed = 5.0; 
+            frames = 0;
+
+            isMagnetActive = false;
+            magnetTimer = 0;
+            magnetTimerDisplay.classList.remove('active');
+            
+            currentLives = 3; 
+            isInvincible = false;
+            invincibilityTimer = 0;
+
+            scoreEl.innerText = "0";
+            speedEl.innerText = "1x"; 
+            
+            updateLifeDisplay(); 
+            
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            
+            Object.values(sounds).forEach(s => s.currentTime = 0);
+            
+            requestAnimationFrame(loop);
+        }
+
+        function gameOver() {
+            isRunning = false;
+            const finalScore = Math.floor(score);
+            finalScoreEl.innerText = finalScore;
+            
+            // Update and save High Score
+            if (finalScore > highScore) {
+                highScore = finalScore;
+                localStorage.setItem('storkRunnerHighScore', highScore.toString());
+            }
+            highScoreValEl.innerText = highScore;
+
+            gameOverScreen.classList.remove('hidden');
+            
+            gameLogo.style.opacity = '0'; 
+            startScreenLogo.style.display = 'block'; 
+            
+            playSound('gameOver'); 
+        }
+        
+        function shareOnTwitter() {
+            const currentScore = Math.floor(score);
+            const high = Math.floor(highScore);
+            const text = encodeURIComponent(`I scored ${currentScore} in the Stork Runner! 🚀 (My High Score: ${high}). Can you beat me?`);
+            // Note: The game link URL should replace 'YOUR_GAME_LINK_HERE' if you host it.
+            const url = `https://x.com/intent/tweet?text=${text}&hashtags=StorkRunner,StorkOracle`;
+            
+            window.open(url, '_blank');
+        }
+
+
+        function loop() {
+            if (!isRunning) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Ground Bar
+            ctx.fillStyle = "#005a8d"; 
+            ctx.fillRect(0, canvas.height - 60, canvas.width, 60);
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height - 60);
+            ctx.lineTo(canvas.width, canvas.height - 60);
+            ctx.strokeStyle = "#00ff9d";
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // Invincibility/Flicker management
+            if (isInvincible) {
+                invincibilityTimer--;
+                if (invincibilityTimer <= 0) {
+                    isInvincible = false;
+                }
+            }
+
+
+            player.dy += gravity;
+            player.y += player.dy;
+
+            if (player.y + player.height > canvas.height - 60) {
+                player.y = canvas.height - 60 - player.height;
+                player.dy = 0;
+                player.grounded = true;
+            } else {
+                player.grounded = false;
+            }
+
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'alphabetic';
+
+            // Draw player (with flicker effect if invincible)
+            const shouldDrawPlayer = !isInvincible || (isInvincible && frames % (2 * BLINK_INTERVAL) < BLINK_INTERVAL);
+
+            if (shouldDrawPlayer) {
+                if (playerImage.complete && playerImage.naturalWidth !== 0) {
+                    ctx.drawImage(playerImage, player.x, player.y, player.width, player.height);
+                } else {
+                    ctx.font = "40px Arial";
+                    ctx.fillText("🦢", player.x, player.y + 35);
+                }
+            }
+            
+
+            // Obstacle spawning (every 100 frames)
+            if (frames % 100 === 0) { 
+                if (Math.random() > 0.3) obstacles.push(new Obstacle());
+            }
+
+            // Token spawning (every 40 frames)
+            if (frames % 40 === 0) {
+                if (Math.random() > 0.5) tokens.push(new Token());
+            }
+
+            const HITBOX_PADDING = 15; 
+            
+            obstacles.forEach((obs, index) => {
+                obs.update();
+                obs.draw();
+                
+                // Collision logic
+                if (
+                    !isInvincible && 
+                    player.x < obs.x + obs.w - HITBOX_PADDING && 
+                    player.x + player.width > obs.x + HITBOX_PADDING && 
+                    player.y < obs.y + obs.h - HITBOX_PADDING && 
+                    player.y + player.height > obs.y + HITBOX_PADDING 
+                ) {
+                    currentLives--; 
+                    spawnParticles(player.x, player.y, 'red', 10);
+                    
+                    updateLifeDisplay(); 
+                    
+                    if (currentLives <= 0) {
+                        gameOver(); 
+                    } else {
+                        isInvincible = true;
+                        invincibilityTimer = INVINCIBILITY_DURATION_SECONDS * 60; 
+                        playSound('hit'); 
+                    }
+                    
+                    obs.markedForDeletion = true; 
+                }
+
+                if (obs.markedForDeletion) obstacles.splice(index, 1);
+            });
+
+            tokens.forEach((token, index) => {
+                token.update();
+                token.draw();
+
+                const distanceX = (player.x + player.width / 2) - (token.x + token.size / 2);
+                const distanceY = (player.y + player.height / 2) - (token.y + token.size / 2);
+                const distance = Math.sqrt(distanceX * distanceX + distanceY * distanceY);
+
+                // Magnet attraction logic
+                if (isMagnetActive && token.type === '⚡' && distance < 300) { 
+                    const magnetForce = 0.1;
+                    token.x += distanceX * magnetForce;
+                    token.y += distanceY * magnetForce;
+                }
+
+                // Token collection logic
+                if (
+                    player.x < token.x + token.size &&
+                    player.x + player.width > token.x &&
+                    player.y < token.y + token.size &&
+                    player.y + player.height > token.y
+                ) {
+                    if (token.type === '⚡') {
+                        score += 10;
+                        scoreEl.innerText = Math.floor(score);
+                        spawnParticles(token.x, token.y, '#00ff9d', 5); 
+                        playSound('token'); 
+                    } else if (token.type === '🧲') {
+                        isMagnetActive = true;
+                        magnetTimer = MAGNET_DURATION_SECONDS * 60; 
+                        magnetTimerDisplay.classList.add('active');
+                        spawnParticles(token.x, token.y, '#ffcc00', 10);
+                        playSound('magnet'); 
+                    }
+                    token.markedForDeletion = true;
+                }
+
+                if (token.markedForDeletion) tokens.splice(index, 1);
+            });
+
+            // Magnet timer update
+            if (isMagnetActive) {
+                magnetTimer--;
+                const secondsLeft = Math.ceil(magnetTimer / 60);
+                magnetTimeRemainingEl.innerText = secondsLeft;
+                if (magnetTimer <= 0) {
+                    isMagnetActive = false;
+                    magnetTimerDisplay.classList.remove('active');
+                }
+            }
+
+            score += 0.05; 
+            scoreEl.innerText = Math.floor(score);
+            
+            frames++;
+            // Game speed increase (faster rate: +0.8 every 500 frames)
+            if (frames % 500 === 0) {
+                gameSpeed += 0.8; 
+                speedEl.innerText = (gameSpeed / 5).toFixed(1) + "x";
+            }
+            
+            requestAnimationFrame(loop);
+        }
+    </script>
+</body>
+</html>
